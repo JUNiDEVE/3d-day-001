@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Deep Sea Bioluminescence — Day 001</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#000510; overflow:hidden; font-family:'Segoe UI', system-ui, sans-serif; }
+  canvas { display:block; }
+
+  #ui {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    pointer-events:none; z-index:10;
+  }
+
+  .title-block {
+    position:fixed; top:40px; left:50%;
+    transform:translateX(-50%);
+    text-align:center; pointer-events:none;
+  }
+  .day-label {
+    font-size:.75rem; letter-spacing:.4em; color:#00e5ff88;
+    text-transform:uppercase; margin-bottom:8px;
+  }
+  .title {
+    font-size:clamp(1.6rem,4vw,3rem);
+    font-weight:900; letter-spacing:-.02em;
+    background: linear-gradient(135deg,#00e5ff,#0077ff,#7b2fff);
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    background-clip:text;
+    filter: drop-shadow(0 0 30px #00e5ff66);
+  }
+  .subtitle {
+    font-size:.85rem; color:#ffffff55; margin-top:8px;
+    letter-spacing:.15em; text-transform:uppercase;
+  }
+
+  .hint {
+    position:fixed; bottom:30px; left:50%;
+    transform:translateX(-50%);
+    font-size:.75rem; color:#ffffff33;
+    letter-spacing:.2em; text-transform:uppercase;
+    animation: pulse 3s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:.8} }
+
+  .depth-meter {
+    position:fixed; right:30px; top:50%;
+    transform:translateY(-50%);
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .depth-label { font-size:.65rem; color:#00e5ff66; letter-spacing:.2em; text-transform:uppercase; }
+  .depth-bar {
+    width:3px; height:200px;
+    background:linear-gradient(to bottom, #00e5ff44, #0000ff22);
+    border-radius:2px; position:relative; overflow:hidden;
+  }
+  .depth-fill {
+    width:100%; background:linear-gradient(to bottom,#00e5ff,#0055ff);
+    border-radius:2px; animation:depthAnim 6s ease-in-out infinite;
+    box-shadow: 0 0 10px #00e5ff;
+  }
+  @keyframes depthAnim {
+    0%{height:20%} 50%{height:80%} 100%{height:20%}
+  }
+  .depth-value {
+    font-size:.75rem; color:#00e5ff88;
+    font-variant-numeric:tabular-nums;
+    animation:depthNum 6s ease-in-out infinite;
+  }
+  @keyframes depthNum {
+    0%{content:'200m'} 100%{}
+  }
+
+  /* creature info panel */
+  .creature-panel {
+    position:fixed; left:30px; bottom:80px;
+    background:rgba(0,10,30,.7);
+    border:1px solid #00e5ff22;
+    border-radius:12px; padding:16px 20px;
+    backdrop-filter:blur(10px);
+    min-width:200px;
+    transition:opacity .5s;
+  }
+  .creature-panel h3 { font-size:.7rem; color:#00e5ff88; letter-spacing:.2em; text-transform:uppercase; margin-bottom:6px; }
+  .creature-name { font-size:1rem; color:#fff; font-weight:700; }
+  .creature-depth { font-size:.75rem; color:#ffffff55; margin-top:4px; }
+  .creature-glow { width:8px; height:8px; border-radius:50%; background:#00e5ff; display:inline-block; margin-right:6px; box-shadow:0 0 8px #00e5ff; animation:glowPulse 1.5s ease-in-out infinite; }
+  @keyframes glowPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:.5} }
+</style>
+</head>
+<body>
+
+<div class="title-block">
+  <div class="day-label">Day 001 · May 26 2026</div>
+  <div class="title">Deep Sea Bioluminescence</div>
+  <div class="subtitle">3,800 meters below the surface</div>
+</div>
+
+<div class="depth-meter">
+  <div class="depth-label">Depth</div>
+  <div class="depth-bar"><div class="depth-fill" id="depthFill"></div></div>
+  <div class="depth-value" id="depthVal">1200m</div>
+</div>
+
+<div class="creature-panel">
+  <h3><span class="creature-glow"></span>Detected</h3>
+  <div class="creature-name" id="creatureName">Vampire Squid</div>
+  <div class="creature-depth" id="creatureDepth">600–900m · Mesopelagic Zone</div>
+</div>
+
+<div class="hint">Move mouse to swim · Scroll to dive</div>
+
+<canvas id="c"></canvas>
+
+<script>
+// ─── CANVAS SETUP ───────────────────────────────────────────
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+let W, H;
+function resize(){
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  if(gl) gl.viewport(0,0,W,H);
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ─── MOUSE / SCROLL ─────────────────────────────────────────
+let mx = 0, my = 0, scrollY = 0;
+window.addEventListener('mousemove', e=>{
+  mx = (e.clientX/W)*2-1;
+  my = -((e.clientY/H)*2-1);
+});
+window.addEventListener('wheel', e=>{
+  scrollY = Math.max(0, Math.min(1, scrollY + e.deltaY*0.001));
+});
+
+// ─── DEPTH METER ────────────────────────────────────────────
+const depthFill = document.getElementById('depthFill');
+const depthVal  = document.getElementById('depthVal');
+const creatureName  = document.getElementById('creatureName');
+const creatureDepth = document.getElementById('creatureDepth');
+const creatures = [
+  {name:'Anglerfish',       depth:'200–300m · Twilight Zone'},
+  {name:'Vampire Squid',    depth:'600–900m · Mesopelagic Zone'},
+  {name:'Dumbo Octopus',    depth:'1000–4000m · Bathypelagic Zone'},
+  {name:'Giant Isopod',     depth:'170–2100m · Benthic Zone'},
+  {name:'Barreleye Fish',   depth:'400–800m · Midnight Zone'},
+  {name:'Siphonophore',     depth:'700–1000m · Deep Pelagic Zone'},
+  {name:'Firefly Squid',    depth:'0–400m · Epipelagic Zone'},
+  {name:'Sea Pen',          depth:'10–2000m · Benthic Zone'},
+];
+let lastCreature = -1;
+function updateDepth(t){
+  const d = Math.round(200 + scrollY*3600 + Math.sin(t*.0005)*80);
+  depthFill.style.height = (20 + scrollY*60) + '%';
+  depthVal.textContent = d + 'm';
+  const ci = Math.floor((t/5000)%creatures.length);
+  if(ci !== lastCreature){
+    lastCreature = ci;
+    creatureName.textContent  = creatures[ci].name;
+    creatureDepth.textContent = creatures[ci].depth;
+  }
+}
+
+// ─── WEBGL SHADERS ──────────────────────────────────────────
+const VS = `
+attribute vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos,0,1); }
+`;
+
+const FS = `
+precision highp float;
+uniform vec2  u_res;
+uniform float u_time;
+uniform vec2  u_mouse;
+uniform float u_scroll;
+
+// hash & noise helpers
+float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+float hash(float n){ return fract(sin(n)*43758.5453); }
+
+float noise(vec2 p){
+  vec2 i=floor(p), f=fract(p);
+  f=f*f*(3.-2.*f);
+  float a=hash(i), b=hash(i+vec2(1,0)),
+        c=hash(i+vec2(0,1)), d=hash(i+vec2(1,1));
+  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+}
+float fbm(vec2 p){
+  float v=0.,a=.5;
+  for(int i=0;i<6;i++){v+=a*noise(p);p*=2.1;a*=.5;}
+  return v;
+}
+
+// ── Bioluminescent particle ──
+float glowParticle(vec2 uv, vec2 center, float radius, float glow){
+  float d=length(uv-center);
+  return radius/(d*d+glow);
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - u_res*.5)/min(u_res.x,u_res.y);
+  float t  = u_time * .0004;
+  float sc = .3 + u_scroll*.7;
+
+  // ── deep water background ──
+  float depth = fbm(uv*.8+t*.1);
+  float layer = fbm(uv*1.5-t*.07+vec2(depth*.3));
+  vec3 waterCol = mix(
+    vec3(.0,.02,.08),
+    vec3(.0,.06,.18),
+    depth*layer
+  );
+  // caustics
+  float caus = fbm(uv*4.+t*.3)*fbm(uv*3.-t*.2);
+  waterCol += vec3(.0,.01,.04)*caus*caus*3.;
+
+  // ── bioluminescent particles ──
+  vec3 glow = vec3(0.);
+  float seed = 1.;
+
+  // Large slow creatures
+  for(int i=0;i<6;i++){
+    float fi=float(i);
+    seed = hash(fi+17.);
+    float ox = hash(fi*3.1)*2.-1.;
+    float oy = hash(fi*7.3)*2.-1.;
+    float spd = .15+hash(fi*2.7)*.2;
+    vec2 center = vec2(
+      ox + sin(t*spd + fi*2.4)*(.4+sc*.2) + u_mouse.x*.08,
+      oy + cos(t*spd*.7 + fi*1.7)*(.3+sc*.15) + u_mouse.y*.08
+    );
+    // creature body glow
+    float r = .003+hash(fi*.9)*.004;
+    float g = glowParticle(uv, center, r, .0008);
+    vec3 col;
+    if(i==0) col=vec3(.0,.8,1.)*1.2;
+    else if(i==1) col=vec3(.4,.1,1.)*1.5;
+    else if(i==2) col=vec3(.0,1.,.4)*1.0;
+    else if(i==3) col=vec3(1.,.4,.0)*.8;
+    else if(i==4) col=vec3(.2,.6,1.)*1.3;
+    else col=vec3(.8,.0,.8)*1.1;
+
+    // pulse
+    float pulse = sin(u_time*.002*(1.+hash(fi))+ fi)*0.5+0.5;
+    g *= (.5+pulse*.5);
+    glow += col * g;
+
+    // trailing tendrils
+    for(int j=0;j<5;j++){
+      float fj=float(j);
+      vec2 tc = center + vec2(
+        sin(t*(1.+fj*.3)+fj*1.7)*(.02+fj*.015),
+        cos(t*(1.1+fj*.2)+fj*2.3)*(.015+fj*.01)
+      );
+      float tg = glowParticle(uv, tc, r*.4, .0003)*(.6-fj*.1);
+      glow += col*.7*tg;
+    }
+  }
+
+  // Micro particles (plankton)
+  for(int i=0;i<80;i++){
+    float fi=float(i);
+    vec2 base = vec2(hash(fi*1.3)*2.-1., hash(fi*2.7)*2.-1.);
+    float spd = .05+hash(fi*.7)*.1;
+    vec2 pos = base + vec2(
+      sin(t*spd+fi)*0.15,
+      fract(base.y + t*spd*.3) * 2. - 1.
+    );
+    float sz = .0003+hash(fi*3.1)*.0004;
+    float g  = glowParticle(uv+u_mouse*.03, pos, sz, .00005);
+    float hue = hash(fi*.5);
+    vec3 col  = mix(vec3(.0,.8,1.), vec3(.5,.0,1.), hue);
+    float pulse = sin(u_time*.003*hash(fi)+fi*2.)*0.5+0.5;
+    glow += col * g * (.3+pulse*.7);
+  }
+
+  // ── jellyfish ──
+  for(int i=0;i<3;i++){
+    float fi=float(i);
+    float jt = t*.18*(1.+fi*.1);
+    vec2 jc = vec2(
+      sin(jt+fi*2.09)*.55 + u_mouse.x*.1,
+      cos(jt*.7+fi*1.5)*.45 + u_mouse.y*.1
+    );
+    // dome
+    float d = length(uv-jc);
+    float dome = smoothstep(.18,.0,d);
+    vec3 jcol = (i==0) ? vec3(.5,.0,1.) : (i==1) ? vec3(.0,.8,1.) : vec3(.9,.0,.5);
+    float jpulse = sin(u_time*.0025+fi*2.)*0.5+0.5;
+    glow += jcol * dome*.08 * jpulse;
+    // rim
+    float rim = smoothstep(.18,.16,d)*smoothstep(.14,.16,d);
+    glow += jcol * rim * (.5+jpulse);
+    // tentacles
+    for(int j=0;j<8;j++){
+      float fj=float(j);
+      float ang = fj/8.*6.283;
+      vec2 td = vec2(sin(ang)*.005, 0.);
+      for(int k=0;k<12;k++){
+        float fk=float(k);
+        vec2 tp = jc + vec2(
+          sin(ang)*(.18+fk*.02)+sin(u_time*.003+fk+fj)*.01,
+          .18+fk*.025+sin(u_time*.002+fk*1.3)*.008
+        );
+        float tg = glowParticle(uv, tp, .0008, .00008);
+        glow += jcol*tg*(.3+jpulse*.7);
+      }
+    }
+  }
+
+  // ── scanline / depth haze ──
+  float scanline = sin(gl_FragCoord.y*.5+u_time*.05)*.015+.985;
+  float vignette = 1.-length(uv)*1.1;
+  vignette = clamp(vignette,0.,1.);
+  vignette = pow(vignette,1.4);
+
+  // ── depth darkening with scroll ──
+  float depthDark = 1.-u_scroll*.5;
+
+  vec3 col = (waterCol + glow) * scanline * vignette * depthDark;
+
+  // tone map
+  col = col/(col+.3);
+  col = pow(col, vec3(.85));
+
+  gl_FragColor = vec4(col,1.);
+}
+`;
+
+function compileShader(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+
+const prog = gl.createProgram();
+gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+// full-screen quad
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+  -1,-1,  1,-1,  -1,1,
+   1,-1,  1, 1,  -1,1
+]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog,'a_pos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+const uRes    = gl.getUniformLocation(prog,'u_res');
+const uTime   = gl.getUniformLocation(prog,'u_time');
+const uMouse  = gl.getUniformLocation(prog,'u_mouse');
+const uScroll = gl.getUniformLocation(prog,'u_scroll');
+
+// ─── SMOOTH MOUSE ───────────────────────────────────────────
+let smx=0, smy=0;
+
+// ─── RENDER LOOP ────────────────────────────────────────────
+function frame(t){
+  smx += (mx-smx)*.03;
+  smy += (my-smy)*.03;
+
+  gl.uniform2f(uRes, W, H);
+  gl.uniform1f(uTime, t);
+  gl.uniform2f(uMouse, smx, smy);
+  gl.uniform1f(uScroll, scrollY);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+  updateDepth(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
