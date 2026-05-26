@@ -3,384 +3,1245 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Deep Sea Bioluminescence — Day 001</title>
+<title>ABYSSAL — Deep Sea Bioluminescence · Day 001</title>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#000510; overflow:hidden; font-family:'Segoe UI', system-ui, sans-serif; }
-  canvas { display:block; }
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
 
-  #ui {
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    pointer-events:none; z-index:10;
-  }
+:root {
+  --c-bg:       #00020a;
+  --c-primary:  #00d4ff;
+  --c-accent:   #7b2fff;
+  --c-bio:      #00ffaa;
+  --c-warn:     #ff3d6b;
+  --c-text:     rgba(255,255,255,0.85);
+  --c-muted:    rgba(255,255,255,0.35);
+  --font-main:  'Space Grotesk', system-ui, sans-serif;
+  --font-mono:  'Space Mono', monospace;
+}
 
-  .title-block {
-    position:fixed; top:40px; left:50%;
-    transform:translateX(-50%);
-    text-align:center; pointer-events:none;
-  }
-  .day-label {
-    font-size:.75rem; letter-spacing:.4em; color:#00e5ff88;
-    text-transform:uppercase; margin-bottom:8px;
-  }
-  .title {
-    font-size:clamp(1.6rem,4vw,3rem);
-    font-weight:900; letter-spacing:-.02em;
-    background: linear-gradient(135deg,#00e5ff,#0077ff,#7b2fff);
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-    background-clip:text;
-    filter: drop-shadow(0 0 30px #00e5ff66);
-  }
-  .subtitle {
-    font-size:.85rem; color:#ffffff55; margin-top:8px;
-    letter-spacing:.15em; text-transform:uppercase;
-  }
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
 
-  .hint {
-    position:fixed; bottom:30px; left:50%;
-    transform:translateX(-50%);
-    font-size:.75rem; color:#ffffff33;
-    letter-spacing:.2em; text-transform:uppercase;
-    animation: pulse 3s ease-in-out infinite;
-  }
-  @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:.8} }
+html, body {
+  width:100%; height:100%;
+  background:var(--c-bg);
+  color:var(--c-text);
+  font-family:var(--font-main);
+  overflow:hidden;
+  user-select:none;
+}
 
-  .depth-meter {
-    position:fixed; right:30px; top:50%;
-    transform:translateY(-50%);
-    display:flex; flex-direction:column; align-items:center; gap:6px;
-  }
-  .depth-label { font-size:.65rem; color:#00e5ff66; letter-spacing:.2em; text-transform:uppercase; }
-  .depth-bar {
-    width:3px; height:200px;
-    background:linear-gradient(to bottom, #00e5ff44, #0000ff22);
-    border-radius:2px; position:relative; overflow:hidden;
-  }
-  .depth-fill {
-    width:100%; background:linear-gradient(to bottom,#00e5ff,#0055ff);
-    border-radius:2px; animation:depthAnim 6s ease-in-out infinite;
-    box-shadow: 0 0 10px #00e5ff;
-  }
-  @keyframes depthAnim {
-    0%{height:20%} 50%{height:80%} 100%{height:20%}
-  }
-  .depth-value {
-    font-size:.75rem; color:#00e5ff88;
-    font-variant-numeric:tabular-nums;
-    animation:depthNum 6s ease-in-out infinite;
-  }
-  @keyframes depthNum {
-    0%{content:'200m'} 100%{}
-  }
+/* ── CANVAS ── */
+#glcanvas {
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  display:block;
+}
 
-  /* creature info panel */
-  .creature-panel {
-    position:fixed; left:30px; bottom:80px;
-    background:rgba(0,10,30,.7);
-    border:1px solid #00e5ff22;
-    border-radius:12px; padding:16px 20px;
-    backdrop-filter:blur(10px);
-    min-width:200px;
-    transition:opacity .5s;
-  }
-  .creature-panel h3 { font-size:.7rem; color:#00e5ff88; letter-spacing:.2em; text-transform:uppercase; margin-bottom:6px; }
-  .creature-name { font-size:1rem; color:#fff; font-weight:700; }
-  .creature-depth { font-size:.75rem; color:#ffffff55; margin-top:4px; }
-  .creature-glow { width:8px; height:8px; border-radius:50%; background:#00e5ff; display:inline-block; margin-right:6px; box-shadow:0 0 8px #00e5ff; animation:glowPulse 1.5s ease-in-out infinite; }
-  @keyframes glowPulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:.5} }
+/* ── LOADING SCREEN ── */
+#loader {
+  position:fixed; inset:0; z-index:1000;
+  background:#00020a;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:24px;
+  transition:opacity 1.2s ease, visibility 1.2s ease;
+}
+#loader.hidden { opacity:0; visibility:hidden; }
+
+.loader-sonar {
+  position:relative; width:80px; height:80px;
+}
+.loader-sonar::before,
+.loader-sonar::after {
+  content:'';
+  position:absolute; inset:0;
+  border:1px solid var(--c-primary);
+  border-radius:50%;
+  animation:sonarPing 2s ease-out infinite;
+}
+.loader-sonar::after { animation-delay:1s; }
+.loader-dot {
+  position:absolute; inset:50%; width:6px; height:6px;
+  transform:translate(-50%,-50%);
+  background:var(--c-primary); border-radius:50%;
+  box-shadow:0 0 12px var(--c-primary);
+}
+@keyframes sonarPing {
+  0%   { transform:scale(0.2); opacity:1; }
+  100% { transform:scale(1);   opacity:0; }
+}
+
+.loader-text {
+  font-family:var(--font-mono);
+  font-size:.75rem; letter-spacing:.3em;
+  color:var(--c-primary); text-transform:uppercase;
+}
+.loader-sub {
+  font-size:.6rem; letter-spacing:.2em;
+  color:var(--c-muted); text-transform:uppercase;
+  animation:blink 1.2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+/* ── HUD SHELL ── */
+#hud {
+  position:fixed; inset:0; z-index:100;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity 1.5s ease;
+}
+#hud.visible { opacity:1; }
+
+/* ── TOP BAR ── */
+.top-bar {
+  position:absolute; top:0; left:0; right:0;
+  padding:20px 28px;
+  display:flex; align-items:flex-start; justify-content:space-between;
+  background:linear-gradient(to bottom, rgba(0,2,10,.9) 0%, transparent 100%);
+}
+
+.brand {
+  display:flex; flex-direction:column; gap:2px;
+}
+.brand-name {
+  font-size:1.4rem; font-weight:700;
+  letter-spacing:.12em; text-transform:uppercase;
+  background:linear-gradient(90deg, var(--c-primary), var(--c-accent));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.brand-sub {
+  font-family:var(--font-mono);
+  font-size:.6rem; letter-spacing:.25em;
+  color:var(--c-muted); text-transform:uppercase;
+}
+
+.top-right {
+  display:flex; flex-direction:column; align-items:flex-end; gap:6px;
+}
+.mission-tag {
+  font-family:var(--font-mono); font-size:.6rem;
+  letter-spacing:.2em; color:var(--c-muted);
+  text-transform:uppercase;
+}
+.status-pill {
+  display:flex; align-items:center; gap:6px;
+  background:rgba(0,212,255,.08);
+  border:1px solid rgba(0,212,255,.2);
+  border-radius:20px; padding:4px 12px;
+}
+.status-dot {
+  width:5px; height:5px; border-radius:50%;
+  background:var(--c-bio);
+  box-shadow:0 0 6px var(--c-bio);
+  animation:statusPulse 2s ease-in-out infinite;
+}
+@keyframes statusPulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+.status-text {
+  font-family:var(--font-mono); font-size:.6rem;
+  letter-spacing:.15em; color:var(--c-bio);
+  text-transform:uppercase;
+}
+
+/* ── DEPTH PANEL (LEFT) ── */
+.depth-panel {
+  position:absolute; left:28px; top:50%;
+  transform:translateY(-50%);
+  display:flex; flex-direction:column;
+  align-items:center; gap:10px;
+}
+
+.depth-label-v {
+  font-family:var(--font-mono); font-size:.55rem;
+  letter-spacing:.2em; color:var(--c-muted);
+  text-transform:uppercase;
+  writing-mode:vertical-rl;
+  text-orientation:mixed;
+  transform:rotate(180deg);
+}
+
+.depth-track {
+  width:2px; height:220px;
+  background:rgba(0,212,255,.1);
+  border-radius:2px; position:relative;
+}
+.depth-cursor {
+  position:absolute; left:50%; top:0%;
+  transform:translateX(-50%);
+  width:8px; height:2px;
+  background:var(--c-primary);
+  box-shadow:0 0 8px var(--c-primary);
+  border-radius:1px;
+  transition:top .5s ease;
+}
+/* zone markers */
+.zone-marker {
+  position:absolute; left:14px;
+  display:flex; align-items:center; gap:6px;
+  white-space:nowrap;
+}
+.zone-marker-line {
+  width:6px; height:1px;
+  background:rgba(255,255,255,.15);
+}
+.zone-marker-label {
+  font-family:var(--font-mono); font-size:.48rem;
+  letter-spacing:.1em; color:rgba(255,255,255,.2);
+  text-transform:uppercase;
+}
+
+.depth-readout {
+  font-family:var(--font-mono); font-size:1.1rem;
+  font-weight:700; color:var(--c-primary);
+  letter-spacing:.05em;
+  text-shadow:0 0 20px rgba(0,212,255,.5);
+}
+.depth-unit {
+  font-family:var(--font-mono); font-size:.55rem;
+  color:var(--c-muted); letter-spacing:.2em;
+}
+
+/* ── PRESSURE / TEMP ── */
+.env-stats {
+  position:absolute; left:28px; bottom:40px;
+  display:flex; flex-direction:column; gap:8px;
+}
+.env-stat {
+  display:flex; flex-direction:column; gap:2px;
+}
+.env-stat-label {
+  font-family:var(--font-mono); font-size:.5rem;
+  letter-spacing:.2em; color:var(--c-muted);
+  text-transform:uppercase;
+}
+.env-stat-value {
+  font-family:var(--font-mono); font-size:.8rem;
+  color:var(--c-text); font-weight:700;
+}
+
+/* ── CREATURE PANEL (RIGHT) ── */
+.creature-panel {
+  position:absolute; right:28px; top:50%;
+  transform:translateY(-50%);
+  width:240px;
+  background:rgba(0,5,20,.75);
+  border:1px solid rgba(0,212,255,.12);
+  border-radius:12px;
+  backdrop-filter:blur(16px);
+  overflow:hidden;
+  transition:opacity .5s ease, transform .5s ease;
+}
+
+.creature-header {
+  padding:14px 16px 10px;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  display:flex; align-items:center; gap:8px;
+}
+.creature-icon {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--c-bio);
+  box-shadow:0 0 8px var(--c-bio);
+  flex-shrink:0;
+}
+.creature-tag {
+  font-family:var(--font-mono); font-size:.55rem;
+  letter-spacing:.2em; color:var(--c-bio);
+  text-transform:uppercase;
+}
+
+.creature-body { padding:14px 16px; }
+.creature-name {
+  font-size:1rem; font-weight:600;
+  color:#fff; margin-bottom:4px;
+  line-height:1.2;
+}
+.creature-sci {
+  font-family:var(--font-mono); font-size:.6rem;
+  color:var(--c-muted); font-style:italic;
+  margin-bottom:12px;
+}
+
+.creature-stats {
+  display:flex; flex-direction:column; gap:6px;
+  margin-bottom:12px;
+}
+.c-stat-row {
+  display:flex; justify-content:space-between; align-items:center;
+}
+.c-stat-key {
+  font-family:var(--font-mono); font-size:.55rem;
+  letter-spacing:.1em; color:var(--c-muted);
+  text-transform:uppercase;
+}
+.c-stat-val {
+  font-family:var(--font-mono); font-size:.6rem;
+  color:var(--c-text);
+}
+
+.biolum-bar-wrap {
+  margin-top:4px;
+}
+.biolum-bar-label {
+  font-family:var(--font-mono); font-size:.5rem;
+  letter-spacing:.15em; color:var(--c-muted);
+  text-transform:uppercase; margin-bottom:5px;
+}
+.biolum-bar-track {
+  height:3px; background:rgba(255,255,255,.07);
+  border-radius:2px; overflow:hidden;
+}
+.biolum-bar-fill {
+  height:100%; border-radius:2px;
+  transition:width 1s ease;
+  box-shadow:0 0 8px currentColor;
+}
+
+.creature-fact {
+  padding:10px 16px 14px;
+  border-top:1px solid rgba(255,255,255,.05);
+  font-size:.68rem; color:var(--c-muted);
+  line-height:1.6;
+  font-style:italic;
+}
+
+/* ── BOTTOM CENTER ── */
+.bottom-center {
+  position:absolute; bottom:32px; left:50%;
+  transform:translateX(-50%);
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+}
+
+.zone-display {
+  text-align:center;
+}
+.zone-name {
+  font-family:var(--font-mono); font-size:.6rem;
+  letter-spacing:.25em; text-transform:uppercase;
+  color:var(--c-primary);
+  transition:color .8s ease;
+}
+.zone-desc {
+  font-size:.65rem; color:var(--c-muted);
+  letter-spacing:.1em;
+}
+
+.controls-hint {
+  display:flex; gap:20px;
+}
+.hint-item {
+  display:flex; align-items:center; gap:6px;
+}
+.hint-key {
+  background:rgba(255,255,255,.07);
+  border:1px solid rgba(255,255,255,.1);
+  border-radius:4px; padding:2px 7px;
+  font-family:var(--font-mono); font-size:.55rem;
+  color:var(--c-muted);
+}
+.hint-action {
+  font-size:.6rem; color:rgba(255,255,255,.2);
+  letter-spacing:.05em;
+}
+
+/* ── SCAN LINES (subtle) ── */
+#scanlines {
+  position:fixed; inset:0; z-index:50;
+  pointer-events:none;
+  background:repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 3px,
+    rgba(0,0,0,.015) 3px,
+    rgba(0,0,0,.015) 4px
+  );
+  animation:scanMove 12s linear infinite;
+}
+@keyframes scanMove { from{background-position:0 0} to{background-position:0 100%} }
+
+/* ── VIGNETTE ── */
+#vignette {
+  position:fixed; inset:0; z-index:40; pointer-events:none;
+  background:radial-gradient(ellipse at center, transparent 50%, rgba(0,2,10,.75) 100%);
+}
+
+/* ── CORNER DECOR ── */
+.corner {
+  position:absolute;
+  width:20px; height:20px;
+}
+.corner-tl { top:16px; left:16px; border-top:1px solid rgba(0,212,255,.3); border-left:1px solid rgba(0,212,255,.3); }
+.corner-tr { top:16px; right:16px; border-top:1px solid rgba(0,212,255,.3); border-right:1px solid rgba(0,212,255,.3); }
+.corner-bl { bottom:16px; left:16px; border-bottom:1px solid rgba(0,212,255,.3); border-left:1px solid rgba(0,212,255,.3); }
+.corner-br { bottom:16px; right:16px; border-bottom:1px solid rgba(0,212,255,.3); border-right:1px solid rgba(0,212,255,.3); }
+
+/* ── CLICK RIPPLE ── */
+.ripple {
+  position:fixed; pointer-events:none; z-index:200;
+  border:1px solid var(--c-bio);
+  border-radius:50%;
+  width:0; height:0;
+  transform:translate(-50%,-50%);
+  animation:rippleOut .8s ease-out forwards;
+}
+@keyframes rippleOut {
+  to { width:80px; height:80px; opacity:0; }
+}
+
+/* ── LUCIFERIN COUNTER ── */
+.luciferin-counter {
+  position:absolute; right:28px; bottom:40px;
+  display:flex; flex-direction:column; align-items:flex-end; gap:4px;
+}
+.lc-label {
+  font-family:var(--font-mono); font-size:.5rem;
+  letter-spacing:.2em; color:var(--c-muted);
+  text-transform:uppercase;
+}
+.lc-value {
+  font-family:var(--font-mono); font-size:1.2rem;
+  font-weight:700; color:var(--c-bio);
+  text-shadow:0 0 16px var(--c-bio);
+}
+.lc-unit {
+  font-family:var(--font-mono); font-size:.5rem;
+  color:var(--c-muted); letter-spacing:.15em;
+}
+
+/* ── RESPONSIVE ── */
+@media(max-width:600px){
+  .creature-panel { width:190px; right:14px; }
+  .depth-panel { left:14px; }
+  .env-stats { left:14px; }
+  .luciferin-counter { right:14px; }
+  .top-bar { padding:14px 16px; }
+}
 </style>
 </head>
 <body>
 
-<div class="title-block">
-  <div class="day-label">Day 001 · May 26 2026</div>
-  <div class="title">Deep Sea Bioluminescence</div>
-  <div class="subtitle">3,800 meters below the surface</div>
+<!-- LOADING -->
+<div id="loader">
+  <div class="loader-sonar">
+    <div class="loader-dot"></div>
+  </div>
+  <div class="loader-text">Initialising Sonar Array</div>
+  <div class="loader-sub">Descending into the abyss…</div>
 </div>
 
-<div class="depth-meter">
-  <div class="depth-label">Depth</div>
-  <div class="depth-bar"><div class="depth-fill" id="depthFill"></div></div>
-  <div class="depth-value" id="depthVal">1200m</div>
-</div>
+<!-- SCANLINES + VIGNETTE -->
+<div id="scanlines"></div>
+<div id="vignette"></div>
 
-<div class="creature-panel">
-  <h3><span class="creature-glow"></span>Detected</h3>
-  <div class="creature-name" id="creatureName">Vampire Squid</div>
-  <div class="creature-depth" id="creatureDepth">600–900m · Mesopelagic Zone</div>
-</div>
+<!-- WEBGL CANVAS -->
+<canvas id="glcanvas"></canvas>
 
-<div class="hint">Move mouse to swim · Scroll to dive</div>
+<!-- HUD -->
+<div id="hud">
+  <!-- corners -->
+  <div class="corner corner-tl"></div>
+  <div class="corner corner-tr"></div>
+  <div class="corner corner-bl"></div>
+  <div class="corner corner-br"></div>
 
-<canvas id="c"></canvas>
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="brand">
+      <div class="brand-name">ABYSSAL</div>
+      <div class="brand-sub">Deep Sea Bioluminescence · Day 001 · 26 May 2026</div>
+    </div>
+    <div class="top-right">
+      <div class="mission-tag">ROV–Nautilus · Expedition 001</div>
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        <div class="status-text">Bio-signal active</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEPTH PANEL -->
+  <div class="depth-panel">
+    <div class="depth-label-v">Depth</div>
+    <div class="depth-track" id="depthTrack">
+      <div class="depth-cursor" id="depthCursor"></div>
+      <!-- zone markers injected by JS -->
+    </div>
+    <div class="depth-readout" id="depthReadout">200</div>
+    <div class="depth-unit">METERS</div>
+  </div>
+
+  <!-- ENV STATS -->
+  <div class="env-stats">
+    <div class="env-stat">
+      <div class="env-stat-label">Pressure</div>
+      <div class="env-stat-value" id="pressureVal">20 atm</div>
+    </div>
+    <div class="env-stat">
+      <div class="env-stat-label">Temp</div>
+      <div class="env-stat-value" id="tempVal">4.2 °C</div>
+    </div>
+    <div class="env-stat">
+      <div class="env-stat-label">Salinity</div>
+      <div class="env-stat-value" id="salinityVal">34.7 PSU</div>
+    </div>
+  </div>
+
+  <!-- CREATURE PANEL -->
+  <div class="creature-panel" id="creaturePanel">
+    <div class="creature-header">
+      <div class="creature-icon"></div>
+      <div class="creature-tag">Specimen Detected</div>
+    </div>
+    <div class="creature-body">
+      <div class="creature-name" id="cName">Atolla Jellyfish</div>
+      <div class="creature-sci" id="cSci">Atolla wyvillei</div>
+      <div class="creature-stats">
+        <div class="c-stat-row">
+          <span class="c-stat-key">Zone</span>
+          <span class="c-stat-val" id="cZone">Bathypelagic</span>
+        </div>
+        <div class="c-stat-row">
+          <span class="c-stat-key">Depth range</span>
+          <span class="c-stat-val" id="cDepth">200–4000m</span>
+        </div>
+        <div class="c-stat-row">
+          <span class="c-stat-key">Glow colour</span>
+          <span class="c-stat-val" id="cColor">Blue (476nm)</span>
+        </div>
+        <div class="c-stat-row">
+          <span class="c-stat-key">Strategy</span>
+          <span class="c-stat-val" id="cStrategy">Alarm display</span>
+        </div>
+      </div>
+      <div class="biolum-bar-wrap">
+        <div class="biolum-bar-label">Bioluminescence intensity</div>
+        <div class="biolum-bar-track">
+          <div class="biolum-bar-fill" id="cBioBar" style="width:82%;color:var(--c-primary);background:var(--c-primary)"></div>
+        </div>
+      </div>
+    </div>
+    <div class="creature-fact" id="cFact">
+      "When attacked, produces a spinning wheel of blue flashes — summoning larger predators to chase away the attacker."
+    </div>
+  </div>
+
+  <!-- BOTTOM CENTER -->
+  <div class="bottom-center">
+    <div class="zone-display">
+      <div class="zone-name" id="zoneName">MESOPELAGIC ZONE</div>
+      <div class="zone-desc" id="zoneDesc">200–1000m · Twilight · 90% of organisms bioluminescent</div>
+    </div>
+    <div class="controls-hint">
+      <div class="hint-item">
+        <div class="hint-key">MOUSE</div>
+        <div class="hint-action">Swim</div>
+      </div>
+      <div class="hint-item">
+        <div class="hint-key">SCROLL</div>
+        <div class="hint-action">Dive deeper</div>
+      </div>
+      <div class="hint-item">
+        <div class="hint-key">CLICK</div>
+        <div class="hint-action">Sonar ping</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LUCIFERIN COUNTER -->
+  <div class="luciferin-counter">
+    <div class="lc-label">Luciferin events</div>
+    <div class="lc-value" id="luciferinVal">00000</div>
+    <div class="lc-unit">reactions / sec</div>
+  </div>
+
+</div><!-- /hud -->
 
 <script>
-// ─── CANVAS SETUP ───────────────────────────────────────────
-const canvas = document.getElementById('c');
-const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+//  WEBGL ENGINE
+// ═══════════════════════════════════════════════════════════
+const canvas = document.getElementById('glcanvas');
+const gl = canvas.getContext('webgl', {
+  antialias: false,
+  alpha: false,
+  powerPreference: 'high-performance'
+});
 
 let W, H;
-function resize(){
-  W = canvas.width  = window.innerWidth;
-  H = canvas.height = window.innerHeight;
-  if(gl) gl.viewport(0,0,W,H);
+function resize() {
+  // Render at device pixel ratio for sharpness, capped for perf
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = canvas.width  = window.innerWidth  * dpr;
+  H = canvas.height = window.innerHeight * dpr;
+  canvas.style.width  = window.innerWidth  + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+  if (gl) gl.viewport(0, 0, W, H);
 }
 resize();
 window.addEventListener('resize', resize);
 
-// ─── MOUSE / SCROLL ─────────────────────────────────────────
-let mx = 0, my = 0, scrollY = 0;
-window.addEventListener('mousemove', e=>{
-  mx = (e.clientX/W)*2-1;
-  my = -((e.clientY/H)*2-1);
+// ───────────────────────────────────────────────────────────
+//  INPUT
+// ───────────────────────────────────────────────────────────
+let mx = 0, my = 0;          // normalised -1..1
+let smx = 0, smy = 0;        // smoothed
+let scrollDepth = 0;         // 0..1  (depth fraction)
+let targetScroll = 0;
+let sonarPings = [];          // [{x,y,t}]
+
+window.addEventListener('mousemove', e => {
+  mx = (e.clientX / window.innerWidth)  * 2 - 1;
+  my = -((e.clientY / window.innerHeight) * 2 - 1);
 });
-window.addEventListener('wheel', e=>{
-  scrollY = Math.max(0, Math.min(1, scrollY + e.deltaY*0.001));
+window.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  mx = (t.clientX / window.innerWidth)  * 2 - 1;
+  my = -((t.clientY / window.innerHeight) * 2 - 1);
+}, { passive: true });
+window.addEventListener('wheel', e => {
+  targetScroll = Math.max(0, Math.min(1, targetScroll + e.deltaY * 0.0006));
+}, { passive: true });
+window.addEventListener('click', e => {
+  const nx = (e.clientX / window.innerWidth)  * 2 - 1;
+  const ny = -((e.clientY / window.innerHeight) * 2 - 1);
+  sonarPings.push({ x: nx, y: ny, t: 0 });
+  if (sonarPings.length > 6) sonarPings.shift();
+  // visual ripple
+  const r = document.createElement('div');
+  r.className = 'ripple';
+  r.style.left = e.clientX + 'px';
+  r.style.top  = e.clientY + 'px';
+  document.body.appendChild(r);
+  setTimeout(() => r.remove(), 900);
 });
 
-// ─── DEPTH METER ────────────────────────────────────────────
-const depthFill = document.getElementById('depthFill');
-const depthVal  = document.getElementById('depthVal');
-const creatureName  = document.getElementById('creatureName');
-const creatureDepth = document.getElementById('creatureDepth');
-const creatures = [
-  {name:'Anglerfish',       depth:'200–300m · Twilight Zone'},
-  {name:'Vampire Squid',    depth:'600–900m · Mesopelagic Zone'},
-  {name:'Dumbo Octopus',    depth:'1000–4000m · Bathypelagic Zone'},
-  {name:'Giant Isopod',     depth:'170–2100m · Benthic Zone'},
-  {name:'Barreleye Fish',   depth:'400–800m · Midnight Zone'},
-  {name:'Siphonophore',     depth:'700–1000m · Deep Pelagic Zone'},
-  {name:'Firefly Squid',    depth:'0–400m · Epipelagic Zone'},
-  {name:'Sea Pen',          depth:'10–2000m · Benthic Zone'},
-];
-let lastCreature = -1;
-function updateDepth(t){
-  const d = Math.round(200 + scrollY*3600 + Math.sin(t*.0005)*80);
-  depthFill.style.height = (20 + scrollY*60) + '%';
-  depthVal.textContent = d + 'm';
-  const ci = Math.floor((t/5000)%creatures.length);
-  if(ci !== lastCreature){
-    lastCreature = ci;
-    creatureName.textContent  = creatures[ci].name;
-    creatureDepth.textContent = creatures[ci].depth;
-  }
-}
-
-// ─── WEBGL SHADERS ──────────────────────────────────────────
+// ───────────────────────────────────────────────────────────
+//  SHADERS
+// ───────────────────────────────────────────────────────────
 const VS = `
-attribute vec2 a_pos;
-void main(){ gl_Position = vec4(a_pos,0,1); }
+attribute vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
 `;
 
+// The masterpiece fragment shader
 const FS = `
 precision highp float;
-uniform vec2  u_res;
-uniform float u_time;
-uniform vec2  u_mouse;
-uniform float u_scroll;
 
-// hash & noise helpers
-float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
-float hash(float n){ return fract(sin(n)*43758.5453); }
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec2  uMouse;       // -1..1
+uniform float uDepth;       // 0..1  (scroll depth)
 
-float noise(vec2 p){
-  vec2 i=floor(p), f=fract(p);
-  f=f*f*(3.-2.*f);
-  float a=hash(i), b=hash(i+vec2(1,0)),
-        c=hash(i+vec2(0,1)), d=hash(i+vec2(1,1));
-  return mix(mix(a,b,f.x),mix(c,d,f.x),f.y);
+// up to 6 sonar pings
+uniform int   uPingCount;
+uniform vec3  uPings[6];    // x,y,age(0..1)
+
+// ─── Math helpers ───────────────────────────────────────
+float hash11(float p) {
+  p = fract(p * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
 }
-float fbm(vec2 p){
-  float v=0.,a=.5;
-  for(int i=0;i<6;i++){v+=a*noise(p);p*=2.1;a*=.5;}
+float hash21(vec2 p) {
+  p = fract(p * vec2(0.1031, 0.1030));
+  p += dot(p, p.yx + 33.33);
+  return fract((p.x + p.y) * p.x);
+}
+vec2 hash22(vec2 p) {
+  vec2 q = vec2(dot(p, vec2(127.1, 311.7)),
+                dot(p, vec2(269.5, 183.3)));
+  return fract(sin(q) * 43758.5453);
+}
+
+// Value noise
+float vnoise(vec2 p) {
+  vec2 i = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(hash21(i),           hash21(i+vec2(1,0)), f.x),
+    mix(hash21(i+vec2(0,1)), hash21(i+vec2(1,1)), f.x),
+    f.y
+  );
+}
+
+// Fractal Brownian Motion (6 octaves)
+float fbm(vec2 p) {
+  float v = 0.0, a = 0.5;
+  mat2 rot = mat2(cos(0.5), sin(0.5), -sin(0.5), cos(0.5));
+  for (int i = 0; i < 6; i++) {
+    v += a * vnoise(p);
+    p = rot * p * 2.1;
+    a *= 0.5;
+  }
   return v;
 }
 
-// ── Bioluminescent particle ──
-float glowParticle(vec2 uv, vec2 center, float radius, float glow){
-  float d=length(uv-center);
-  return radius/(d*d+glow);
+// 3D noise for volumetric feel
+float noise3(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash21(i.xy+vec2(0,0)*i.z), hash21(i.xy+vec2(1,0)*i.z), f.x),
+        mix(hash21(i.xy+vec2(0,1)*i.z), hash21(i.xy+vec2(1,1)*i.z), f.x), f.y),
+    mix(mix(hash21(i.xy+vec2(0,0)*(i.z+1.0)), hash21(i.xy+vec2(1,0)*(i.z+1.0)), f.x),
+        mix(hash21(i.xy+vec2(0,1)*(i.z+1.0)), hash21(i.xy+vec2(1,1)*(i.z+1.0)), f.x), f.y),
+    f.z
+  );
 }
 
-void main(){
-  vec2 uv = (gl_FragCoord.xy - u_res*.5)/min(u_res.x,u_res.y);
-  float t  = u_time * .0004;
-  float sc = .3 + u_scroll*.7;
+// Soft glow / light falloff
+float glow(vec2 uv, vec2 center, float radius) {
+  float d = length(uv - center);
+  return radius / (d * d + 0.0001);
+}
 
-  // ── deep water background ──
-  float depth = fbm(uv*.8+t*.1);
-  float layer = fbm(uv*1.5-t*.07+vec2(depth*.3));
-  vec3 waterCol = mix(
-    vec3(.0,.02,.08),
-    vec3(.0,.06,.18),
-    depth*layer
-  );
-  // caustics
-  float caus = fbm(uv*4.+t*.3)*fbm(uv*3.-t*.2);
-  waterCol += vec3(.0,.01,.04)*caus*caus*3.;
+// Smooth min
+float smin(float a, float b, float k) {
+  float h = clamp(0.5 + 0.5*(b-a)/k, 0.0, 1.0);
+  return mix(b, a, h) - k*h*(1.0-h);
+}
 
-  // ── bioluminescent particles ──
-  vec3 glow = vec3(0.);
-  float seed = 1.;
+// ─── Main ───────────────────────────────────────────────
+void main() {
+  vec2 uv = (gl_FragCoord.xy - uRes * 0.5) / min(uRes.x, uRes.y);
+  float ar = uRes.x / uRes.y;
+  float t  = uTime * 0.001;
 
-  // Large slow creatures
-  for(int i=0;i<6;i++){
-    float fi=float(i);
-    seed = hash(fi+17.);
-    float ox = hash(fi*3.1)*2.-1.;
-    float oy = hash(fi*7.3)*2.-1.;
-    float spd = .15+hash(fi*2.7)*.2;
-    vec2 center = vec2(
-      ox + sin(t*spd + fi*2.4)*(.4+sc*.2) + u_mouse.x*.08,
-      oy + cos(t*spd*.7 + fi*1.7)*(.3+sc*.15) + u_mouse.y*.08
-    );
-    // creature body glow
-    float r = .003+hash(fi*.9)*.004;
-    float g = glowParticle(uv, center, r, .0008);
-    vec3 col;
-    if(i==0) col=vec3(.0,.8,1.)*1.2;
-    else if(i==1) col=vec3(.4,.1,1.)*1.5;
-    else if(i==2) col=vec3(.0,1.,.4)*1.0;
-    else if(i==3) col=vec3(1.,.4,.0)*.8;
-    else if(i==4) col=vec3(.2,.6,1.)*1.3;
-    else col=vec3(.8,.0,.8)*1.1;
+  // Camera drift (mouse parallax + slow auto drift)
+  vec2 camDrift = uMouse * vec2(0.06, 0.04);
+  camDrift += vec2(sin(t*0.13)*0.02, cos(t*0.09)*0.015);
+  vec2 vuv = uv - camDrift;
 
-    // pulse
-    float pulse = sin(u_time*.002*(1.+hash(fi))+ fi)*0.5+0.5;
-    g *= (.5+pulse*.5);
-    glow += col * g;
+  // ── DEPTH COLOUR ATMOSPHERE ──────────────────────────
+  // Mesopelagic (0-0.33): deep blue teal
+  // Bathypelagic (0.33-0.66): near black with violet
+  // Abyssal (0.66-1.0): absolute void, magenta hints
+  vec3 deepColor;
+  float d01 = uDepth;
+  if (d01 < 0.33) {
+    deepColor = mix(vec3(0.0, 0.04, 0.12), vec3(0.0, 0.01, 0.08), d01/0.33);
+  } else if (d01 < 0.66) {
+    deepColor = mix(vec3(0.0, 0.01, 0.08), vec3(0.005, 0.0, 0.04), (d01-0.33)/0.33);
+  } else {
+    deepColor = mix(vec3(0.005, 0.0, 0.04), vec3(0.008, 0.0, 0.015), (d01-0.66)/0.34);
+  }
 
-    // trailing tendrils
-    for(int j=0;j<5;j++){
-      float fj=float(j);
-      vec2 tc = center + vec2(
-        sin(t*(1.+fj*.3)+fj*1.7)*(.02+fj*.015),
-        cos(t*(1.1+fj*.2)+fj*2.3)*(.015+fj*.01)
+  // Volumetric water turbulence
+  float turb = fbm(vuv * 1.8 + t * 0.25) * fbm(vuv * 2.5 - t * 0.18 + 3.7);
+  vec3 waterCol = deepColor + vec3(0.0, 0.012, 0.025) * turb * (1.0 - d01 * 0.7);
+
+  // Marine snow (sinking particles)
+  vec3 snowGlow = vec3(0.0);
+  for (int i = 0; i < 40; i++) {
+    float fi = float(i);
+    float px  = hash11(fi * 1.371) * 2.0 - 1.0;
+    float py  = fract(hash11(fi * 2.619) - t * (0.015 + hash11(fi*0.73)*0.02));
+    py = py * 2.0 - 1.0;
+    float px2 = px + sin(t * 0.5 + fi) * 0.01;
+    float d   = length(vuv - vec2(px2, py));
+    float sz  = 0.0003 + hash11(fi*3.1) * 0.0004;
+    float g   = sz / (d * d + 0.00005);
+    snowGlow += vec3(0.7, 0.85, 1.0) * g * 0.12 * (1.0 - d01 * 0.8);
+  }
+
+  // ── CAUSTICS (surface light at shallow depth) ────────
+  float causticStrength = max(0.0, 1.0 - d01 * 4.0);
+  float c1 = fbm(vuv * 5.0 + t * 0.6);
+  float c2 = fbm(vuv * 5.0 - t * 0.5 + vec2(3.7, 1.2));
+  float caustics = pow(c1 * c2, 2.5) * causticStrength * 0.4;
+  waterCol += vec3(0.0, 0.04, 0.06) * caustics;
+
+  // ── BIOLUMINESCENCE ACCUMULATOR ─────────────────────
+  vec3 bio = vec3(0.0);
+
+  // 1. SIPHONOPHORE (giant colonial organism, chain-like)
+  {
+    float st = t * 0.12;
+    vec2 sBase = vec2(sin(st)*0.5 + camDrift.x*0.5, cos(st*0.7)*0.3);
+    float chainLen = 0.6 + uDepth * 0.2;
+    for (int j = 0; j < 20; j++) {
+      float fj = float(j) / 19.0;
+      float ang = fj * 12.566 + t * 0.3; // 4 full turns
+      float rad = fj * chainLen * 0.15;
+      vec2 zoid = sBase + vec2(
+        rad * cos(ang) + sin(t*0.4 + fj*2.0)*0.02,
+        rad * sin(ang) + cos(t*0.35+ fj*1.7)*0.015
       );
-      float tg = glowParticle(uv, tc, r*.4, .0003)*(.6-fj*.1);
-      glow += col*.7*tg;
+      float pulse = sin(t*3.0 - fj*1.5) * 0.5 + 0.5;
+      float g = glow(vuv, zoid, 0.0008 + pulse * 0.0006);
+      vec3 col = mix(vec3(0.0,0.7,1.0), vec3(0.4,0.0,1.0), fj);
+      bio += col * g * (0.4 + pulse * 0.6);
     }
   }
 
-  // Micro particles (plankton)
-  for(int i=0;i<80;i++){
-    float fi=float(i);
-    vec2 base = vec2(hash(fi*1.3)*2.-1., hash(fi*2.7)*2.-1.);
-    float spd = .05+hash(fi*.7)*.1;
-    vec2 pos = base + vec2(
-      sin(t*spd+fi)*0.15,
-      fract(base.y + t*spd*.3) * 2. - 1.
-    );
-    float sz = .0003+hash(fi*3.1)*.0004;
-    float g  = glowParticle(uv+u_mouse*.03, pos, sz, .00005);
-    float hue = hash(fi*.5);
-    vec3 col  = mix(vec3(.0,.8,1.), vec3(.5,.0,1.), hue);
-    float pulse = sin(u_time*.003*hash(fi)+fi*2.)*0.5+0.5;
-    glow += col * g * (.3+pulse*.7);
-  }
-
-  // ── jellyfish ──
-  for(int i=0;i<3;i++){
-    float fi=float(i);
-    float jt = t*.18*(1.+fi*.1);
-    vec2 jc = vec2(
-      sin(jt+fi*2.09)*.55 + u_mouse.x*.1,
-      cos(jt*.7+fi*1.5)*.45 + u_mouse.y*.1
-    );
+  // 2. ATOLLA JELLYFISH — alarm display (spinning wheel of light)
+  {
+    float jt = t * 0.08;
+    vec2 jc = vec2(sin(jt)*0.42 + uMouse.x*0.05, cos(jt*0.7)*0.28 + uMouse.y*0.04);
+    float jpulse = sin(t * 2.8) * 0.5 + 0.5;
     // dome
-    float d = length(uv-jc);
-    float dome = smoothstep(.18,.0,d);
-    vec3 jcol = (i==0) ? vec3(.5,.0,1.) : (i==1) ? vec3(.0,.8,1.) : vec3(.9,.0,.5);
-    float jpulse = sin(u_time*.0025+fi*2.)*0.5+0.5;
-    glow += jcol * dome*.08 * jpulse;
+    float jd = length(vuv - jc);
+    float dome = smoothstep(0.12, 0.0, jd) * 0.07;
+    bio += vec3(0.0, 0.4, 1.0) * dome * jpulse;
     // rim
-    float rim = smoothstep(.18,.16,d)*smoothstep(.14,.16,d);
-    glow += jcol * rim * (.5+jpulse);
-    // tentacles
-    for(int j=0;j<8;j++){
-      float fj=float(j);
-      float ang = fj/8.*6.283;
-      vec2 td = vec2(sin(ang)*.005, 0.);
-      for(int k=0;k<12;k++){
-        float fk=float(k);
-        vec2 tp = jc + vec2(
-          sin(ang)*(.18+fk*.02)+sin(u_time*.003+fk+fj)*.01,
-          .18+fk*.025+sin(u_time*.002+fk*1.3)*.008
-        );
-        float tg = glowParticle(uv, tp, .0008, .00008);
-        glow += jcol*tg*(.3+jpulse*.7);
+    float rim = smoothstep(0.12, 0.10, jd) * smoothstep(0.08, 0.10, jd);
+    bio += vec3(0.0, 0.6, 1.0) * rim * (0.6 + jpulse * 0.8);
+    // spinning alarm spokes
+    for (int k = 0; k < 12; k++) {
+      float ang = float(k) / 12.0 * 6.2832 + t * 2.5;
+      for (int s = 0; s < 8; s++) {
+        float r = 0.04 + float(s)*0.015;
+        vec2 sp = jc + vec2(cos(ang)*r, sin(ang)*r);
+        float pulse2 = sin(t*5.0 - float(k)*0.524 - float(s)*0.4)*0.5+0.5;
+        float sg = glow(vuv, sp, 0.0005);
+        bio += vec3(0.0, 0.5, 1.0) * sg * pulse2;
+      }
+    }
+    // trailing tentacles (12)
+    for (int k = 0; k < 12; k++) {
+      float ang0 = float(k)/12.0*6.2832;
+      for (int s = 0; s < 15; s++) {
+        float fs = float(s);
+        float r  = 0.12 + fs*0.022;
+        float wiggle = sin(t*1.5 + fs*0.6 + float(k)) * 0.015;
+        vec2 tp = jc + vec2(cos(ang0+wiggle)*r, sin(ang0+wiggle)*r);
+        float tg = glow(vuv, tp, 0.0003) * (1.0 - fs/15.0);
+        bio += vec3(0.0, 0.5, 1.0) * tg * 0.6;
       }
     }
   }
 
-  // ── scanline / depth haze ──
-  float scanline = sin(gl_FragCoord.y*.5+u_time*.05)*.015+.985;
-  float vignette = 1.-length(uv)*1.1;
-  vignette = clamp(vignette,0.,1.);
-  vignette = pow(vignette,1.4);
+  // 3. ANGLERFISH with bacterial lure
+  {
+    float at = t * 0.055;
+    vec2 body = vec2(-0.38 + sin(at)*0.25, -0.15 + cos(at*0.8)*0.18);
+    body += vec2(uMouse.x*0.04, uMouse.y*0.03);
+    // Lure on dangling barbel
+    vec2 lure = body + vec2(
+      0.05 + sin(t*3.5)*0.015,
+      0.09 + sin(t*2.7)*0.012
+    );
+    float lurePulse = sin(t*4.0)*0.5+0.5;
+    float lg = glow(vuv, lure, 0.003 + lurePulse*0.002);
+    bio += vec3(0.2, 1.0, 0.5) * lg * (0.6 + lurePulse*0.8);
+    // halo
+    float halo = smoothstep(0.04, 0.0, length(vuv-lure)) * 0.05;
+    bio += vec3(0.1, 0.8, 0.3) * halo * lurePulse;
+  }
 
-  // ── depth darkening with scroll ──
-  float depthDark = 1.-u_scroll*.5;
+  // 4. DRAGONFISH — secret red spotlight (invisible to prey)
+  {
+    float dt2 = t * 0.07;
+    vec2 dfPos = vec2(0.32 + cos(dt2)*0.3, 0.2 + sin(dt2*0.75)*0.22);
+    // Red suborbital photophore — only visible on deeper dives
+    float redVisibility = smoothstep(0.25, 0.55, uDepth);
+    float redPulse = sin(t*1.8+1.2)*0.5+0.5;
+    // spotlight cone (towards lower left)
+    vec2 spotDir = normalize(vec2(-0.6, -0.4));
+    vec2 toFrag  = normalize(vuv - dfPos);
+    float spotDot = dot(toFrag, spotDir);
+    float spotCone = smoothstep(0.7, 0.95, spotDot);
+    float spotDist = length(vuv - dfPos);
+    float spotlight = spotCone * exp(-spotDist * 4.0) * 0.15;
+    bio += vec3(1.0, 0.05, 0.0) * spotlight * redVisibility * (0.5+redPulse*0.5);
+    // photophore dots along body
+    for (int p = 0; p < 8; p++) {
+      float fp = float(p);
+      vec2 ph = dfPos + vec2(-fp*0.025 - sin(dt2+fp)*0.005, fp*0.005);
+      float pg = glow(vuv, ph, 0.0004);
+      bio += vec3(0.8, 0.0, 0.0) * pg * redVisibility * (0.4+redPulse*0.3);
+    }
+    // blue-green biolum on dorsal  
+    vec2 dorsal = dfPos + vec2(0.0, 0.03);
+    float dg = glow(vuv, dorsal, 0.0006);
+    bio += vec3(0.0, 0.6, 0.8) * dg * 0.5;
+  }
 
-  vec3 col = (waterCol + glow) * scanline * vignette * depthDark;
+  // 5. VAMPIRE SQUID — glowing cloud release when threatened
+  {
+    float vt = t * 0.06;
+    vec2 vs = vec2(0.1 + sin(vt)*0.38, -0.3 + cos(vt*0.65)*0.2);
+    vs += uMouse * 0.03;
+    float threat = smoothstep(0.0, 0.15, length(uMouse));
+    // body glow (photophores covering whole body)
+    float bd = length(vuv - vs);
+    float bodyGlow = smoothstep(0.08, 0.0, bd) * 0.04;
+    bio += vec3(0.5, 0.0, 1.0) * bodyGlow;
+    // Glowing arm tips (8 arms)
+    for (int a = 0; a < 8; a++) {
+      float fa = float(a);
+      float ang = fa/8.0*6.2832 + vt*0.5;
+      float armLen = 0.06 + sin(t*1.2+fa)*0.01;
+      vec2 tip = vs + vec2(cos(ang)*armLen, sin(ang)*armLen);
+      float tg = glow(vuv, tip, 0.0007);
+      float tipPulse = sin(t*2.0+fa*0.8)*0.5+0.5;
+      bio += vec3(0.4, 0.0, 0.9) * tg * (0.5+tipPulse*0.5);
+    }
+    // bioluminescent mucus cloud (when mouse moves = "threatened")
+    for (int m = 0; m < 20; m++) {
+      float fm = float(m);
+      vec2 mPos = vs + vec2(
+        sin(fm*1.3+t*1.5)*0.12*threat,
+        cos(fm*2.1+t*1.2)*0.10*threat
+      );
+      float mg = glow(vuv, mPos, 0.0003) * threat;
+      bio += vec3(0.6, 0.2, 1.0) * mg * 0.8;
+    }
+  }
 
-  // tone map
-  col = col/(col+.3);
-  col = pow(col, vec3(.85));
+  // 6. FIREFLY SQUID (Watasenia scintillans) — photophore grid
+  {
+    float fst = t * 0.14;
+    vec2 fs = vec2(-0.2 + cos(fst)*0.35, 0.35 + sin(fst*0.8)*0.15);
+    // dense photophore array on mantle
+    for (int r = 0; r < 5; r++) {
+      for (int c = 0; c < 8; c++) {
+        float fr = float(r), fc = float(c);
+        vec2 ph = fs + vec2((fc-3.5)*0.012, (fr-2.0)*0.014);
+        float pulse = sin(t*4.0 + fr*1.1 + fc*0.9)*0.5+0.5;
+        float pg = glow(vuv, ph, 0.00035);
+        // real Watasenia: blue photophores wavelength ~470nm
+        bio += vec3(0.0, 0.4, 1.0) * pg * (0.3+pulse*0.7) * 0.8;
+      }
+    }
+  }
 
-  gl_FragColor = vec4(col,1.);
+  // 7. DINOFLAGELLATE PLANKTON — bioluminescent when disturbed by motion
+  {
+    float mouseDist = length(uMouse);
+    float disturbance = smoothstep(0.0, 0.8, mouseDist);
+    for (int p = 0; p < 60; p++) {
+      float fp = float(p);
+      // fixed positions in view space
+      float bx = hash11(fp*1.731)*2.0-1.0;
+      float by = hash11(fp*2.319)*2.0-1.0;
+      // tiny drift
+      bx += sin(t*0.3+fp)*0.008;
+      by += cos(t*0.25+fp)*0.008;
+      // distance from mouse triggers glow
+      vec2 bPos = vec2(bx, by);
+      float mDist = length(bPos - uMouse);
+      float triggered = smoothstep(0.25, 0.0, mDist) * disturbance;
+      float pg = glow(vuv, bPos, 0.0002);
+      float pulse = sin(t*5.0+fp*1.3)*0.5+0.5;
+      // blue-green 490nm (most common dinoflagellate)
+      bio += vec3(0.0, 0.8, 0.6) * pg * (0.1 + triggered*0.9 + pulse*0.1) * 0.9;
+    }
+  }
+
+  // 8. CTENOPHORE (comb jelly) — iridescent rainbow comb rows
+  {
+    float ct = t * 0.05;
+    vec2 cj = vec2(-0.45 + sin(ct)*0.3, 0.1 + cos(ct*0.9)*0.25);
+    // 8 comb rows
+    for (int row = 0; row < 8; row++) {
+      float fr = float(row)/7.0;
+      float rowOffset = (fr-0.5)*0.06;
+      for (int s = 0; s < 12; s++) {
+        float fs = float(s)/11.0;
+        vec2 cilium = cj + vec2(rowOffset, (fs-0.5)*0.14);
+        // rainbow colour cycling (ctenophores refract light into rainbow)
+        float hue = fract(fr*0.6 + t*0.2 + fs*0.1);
+        // Cheap HSV→RGB
+        vec3 hcol;
+        float h6 = hue*6.0;
+        float hf = fract(h6);
+        if      (h6<1.0) hcol = vec3(1.0, hf, 0.0);
+        else if (h6<2.0) hcol = vec3(1.0-hf, 1.0, 0.0);
+        else if (h6<3.0) hcol = vec3(0.0, 1.0, hf);
+        else if (h6<4.0) hcol = vec3(0.0, 1.0-hf, 1.0);
+        else if (h6<5.0) hcol = vec3(hf, 0.0, 1.0);
+        else             hcol = vec3(1.0, 0.0, 1.0-hf);
+        float cg = glow(vuv, cilium, 0.0004);
+        bio += hcol * cg * 0.5;
+      }
+    }
+  }
+
+  // ── SONAR PINGS ────────────────────────────────────────
+  vec3 sonarCol = vec3(0.0);
+  for (int i = 0; i < 6; i++) {
+    if (i >= uPingCount) break;
+    vec2  pc  = uPings[i].xy;
+    float age = uPings[i].z; // 0=fresh, 1=old
+    float rad = age * 0.8;
+    float ring = smoothstep(0.01, 0.0, abs(length(vuv - pc) - rad));
+    sonarCol += vec3(0.0, 1.0, 0.6) * ring * (1.0 - age) * 0.6;
+  }
+  bio += sonarCol;
+
+  // ── DEPTH-BASED EXTINCTION OF BLUE LIGHT ───────────────
+  // Scientifically: blue-green travels furthest, but at extreme depth
+  // even that fades. Red light never makes it past ~20m.
+  float extinction = 1.0 - uDepth * 0.35;
+  bio *= extinction;
+
+  // ── COMPOSITE ──────────────────────────────────────────
+  vec3 col = waterCol + bio + snowGlow;
+
+  // ── POST PROCESSING ────────────────────────────────────
+  // Filmic tone mapping (Uncharted 2)
+  col = col * (col * 2.51 + 0.03) / (col * (col * 2.43 + 0.59) + 0.14);
+
+  // Gamma correction
+  col = pow(max(col, 0.0), vec3(0.4545));
+
+  // Subtle chromatic aberration
+  // (done in single-pass approximation)
+  float caAmt = 0.002 * (1.0 - uDepth * 0.5);
+  vec2 caOff = normalize(uv + 0.001) * caAmt;
+  // approximate: shift the green channel slightly
+  float greenShift = vnoise(uv * 80.0 + t) * 0.003;
+  col.g = col.g + greenShift * 0.15;
+
+  // Dark vignette
+  float vig = 1.0 - dot(uv * 1.1, uv * 1.1);
+  vig = clamp(pow(vig, 1.3), 0.0, 1.0);
+  col *= vig;
+
+  // Subtle film grain
+  float grain = (hash21(uv * 500.0 + t) - 0.5) * 0.018;
+  col += grain;
+
+  gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
 `;
 
-function compileShader(type, src){
+// ───────────────────────────────────────────────────────────
+//  COMPILE & LINK
+// ───────────────────────────────────────────────────────────
+function makeShader(type, src) {
   const s = gl.createShader(type);
   gl.shaderSource(s, src);
   gl.compileShader(s);
-  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-    console.error(gl.getShaderInfoLog(s));
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error('Shader error:', gl.getShaderInfoLog(s));
+  }
   return s;
 }
 
 const prog = gl.createProgram();
-gl.attachShader(prog, compileShader(gl.VERTEX_SHADER, VS));
-gl.attachShader(prog, compileShader(gl.FRAGMENT_SHADER, FS));
+gl.attachShader(prog, makeShader(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, makeShader(gl.FRAGMENT_SHADER, FS));
 gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+  console.error('Link error:', gl.getProgramInfoLog(prog));
+}
 gl.useProgram(prog);
 
-// full-screen quad
+// Full-screen quad
 const buf = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, buf);
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-  -1,-1,  1,-1,  -1,1,
-   1,-1,  1, 1,  -1,1
+  -1,-1,  1,-1,  -1, 1,
+   1,-1,  1, 1,  -1, 1
 ]), gl.STATIC_DRAW);
-const aPos = gl.getAttribLocation(prog,'a_pos');
+const aPos = gl.getAttribLocation(prog, 'aPos');
 gl.enableVertexAttribArray(aPos);
 gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-const uRes    = gl.getUniformLocation(prog,'u_res');
-const uTime   = gl.getUniformLocation(prog,'u_time');
-const uMouse  = gl.getUniformLocation(prog,'u_mouse');
-const uScroll = gl.getUniformLocation(prog,'u_scroll');
+// Uniform locations
+const uLoc = {
+  res:       gl.getUniformLocation(prog, 'uRes'),
+  time:      gl.getUniformLocation(prog, 'uTime'),
+  mouse:     gl.getUniformLocation(prog, 'uMouse'),
+  depth:     gl.getUniformLocation(prog, 'uDepth'),
+  pingCount: gl.getUniformLocation(prog, 'uPingCount'),
+  pings:     gl.getUniformLocation(prog, 'uPings'),
+};
 
-// ─── SMOOTH MOUSE ───────────────────────────────────────────
-let smx=0, smy=0;
+// ═══════════════════════════════════════════════════════════
+//  HUD DATA
+// ═══════════════════════════════════════════════════════════
+const CREATURES = [
+  {
+    name:'Atolla Jellyfish', sci:'Atolla wyvillei',
+    zone:'Bathypelagic', depth:'200–4000m', color:'Blue (476nm)',
+    strategy:'Alarm display', bio:82, bioColor:'#00d4ff',
+    fact:'"When attacked, produces a spinning wheel of blue flashes — summoning larger predators to chase away the attacker. Scientists call it the \'burglar alarm\' display."'
+  },
+  {
+    name:'Pacific Viperfish', sci:'Chauliodus macouni',
+    zone:'Mesopelagic', depth:'200–5000m', color:'Blue-green (486nm)',
+    strategy:'Counter-illumination', bio:75, bioColor:'#00ffaa',
+    fact:'"Fangs so long they cannot close its mouth — instead curves back to pierce the brain of prey on impact. Photophores on its belly erase its silhouette from below."'
+  },
+  {
+    name:'Dragonfish', sci:'Malacosteus niger',
+    zone:'Mesopelagic', depth:'200–1000m', color:'Red (705nm) + Blue',
+    strategy:'Covert spotlight', bio:90, bioColor:'#ff3d6b',
+    fact:'"Produces red bioluminescence invisible to almost all other ocean life — a secret spotlight to hunt in plain sight. Only species known to see their own red light."'
+  },
+  {
+    name:'Siphonophore', sci:'Praya dubia',
+    zone:'Mesopelagic', depth:'700–1000m', color:'Blue-violet (470nm)',
+    strategy:'Lure + ambush', bio:68, bioColor:'#7b2fff',
+    fact:'"The longest animal on Earth at up to 50 metres — yet it is a colony, not one organism. Each individual has a specific role: some swim, some reproduce, some hunt."'
+  },
+  {
+    name:'Vampire Squid', sci:'Vampyroteuthis infernalis',
+    zone:'Bathypelagic', depth:'600–900m', color:'Violet (470nm)',
+    strategy:'Mucus cloud', bio:71, bioColor:'#9b59ff',
+    fact:'"Not a squid or an octopus — its own ancient order. When threatened, ejects a cloud of glowing bioluminescent mucus instead of ink to blind and confuse attackers."'
+  },
+  {
+    name:'Firefly Squid', sci:'Watasenia scintillans',
+    zone:'Mesopelagic', depth:'0–400m', color:'Blue (470nm)',
+    strategy:'Counter-illumination', bio:88, bioColor:'#4499ff',
+    fact:'"Covers its mantle in 1,000 photophores tuned to 470nm. Rises to surface waters each spring to spawn in one of the ocean\'s greatest bioluminescent spectacles."'
+  },
+  {
+    name:'Comb Jelly', sci:'Ctenophora sp.',
+    zone:'Epipelagic', depth:'0–200m', color:'Rainbow (iridescent)',
+    strategy:'Rainbow display', bio:60, bioColor:'#ff00ff',
+    fact:'"The iridescent rainbow is not bioluminescence — it is structural colour from cilia beating 30 times per second. Their actual bioluminescence is blue-green."'
+  },
+  {
+    name:'Anglerfish', sci:'Melanocetus johnsonii',
+    zone:'Bathypelagic', depth:'200–3000m', color:'Blue-green (490nm)',
+    strategy:'Bacterial lure (esca)', bio:78, bioColor:'#00ffaa',
+    fact:'"The glowing lure contains symbiotic bacteria — Photobacterium — that the fish cannot produce itself. The bacteria glow continuously; the fish controls a shutter to pulse it."'
+  },
+];
 
-// ─── RENDER LOOP ────────────────────────────────────────────
-function frame(t){
-  smx += (mx-smx)*.03;
-  smy += (my-smy)*.03;
+const ZONES = [
+  { name:'EPIPELAGIC ZONE',    desc:'0–200m · Sunlit · Dinoflagellates dominate',        minD:0,    maxD:0.11 },
+  { name:'MESOPELAGIC ZONE',   desc:'200–1000m · Twilight · 90% of life bioluminescent', minD:0.11, maxD:0.44 },
+  { name:'BATHYPELAGIC ZONE',  desc:'1000–4000m · Midnight · Total darkness',            minD:0.44, maxD:0.77 },
+  { name:'ABYSSOPELAGIC ZONE', desc:'4000–6000m · Abyss · Crushing pressure',            minD:0.77, maxD:1.0  },
+];
 
-  gl.uniform2f(uRes, W, H);
-  gl.uniform1f(uTime, t);
-  gl.uniform2f(uMouse, smx, smy);
-  gl.uniform1f(uScroll, scrollY);
+// ───────────────────────────────────────────────────────────
+//  HUD ELEMENTS
+// ───────────────────────────────────────────────────────────
+const elDepthReadout = document.getElementById('depthReadout');
+const elDepthCursor  = document.getElementById('depthCursor');
+const elPressure     = document.getElementById('pressureVal');
+const elTemp         = document.getElementById('tempVal');
+const elSalinity     = document.getElementById('salinityVal');
+const elZoneName     = document.getElementById('zoneName');
+const elZoneDesc     = document.getElementById('zoneDesc');
+const elCName        = document.getElementById('cName');
+const elCSci         = document.getElementById('cSci');
+const elCZone        = document.getElementById('cZone');
+const elCDepth       = document.getElementById('cDepth');
+const elCColor       = document.getElementById('cColor');
+const elCStrategy    = document.getElementById('cStrategy');
+const elCBioBar      = document.getElementById('cBioBar');
+const elCFact        = document.getElementById('cFact');
+const elLuciferin    = document.getElementById('luciferinVal');
+
+// Inject zone markers on depth track
+const depthTrack = document.getElementById('depthTrack');
+const zonePositions = [0, 11, 44, 77]; // % from top
+zonePositions.forEach((pct, i) => {
+  const m = document.createElement('div');
+  m.className = 'zone-marker';
+  m.style.top = pct + '%';
+  m.innerHTML = `<div class="zone-marker-line"></div><div class="zone-marker-label">${['0m','200m','1000m','4000m'][i]}</div>`;
+  depthTrack.appendChild(m);
+});
+
+let lastCreatureIdx = -1;
+let luciferinCount  = 0;
+let luciferinRate   = 0;
+
+function updateHUD(t, depth) {
+  // Depth (0..1 → 0..6000m)
+  const depthM = Math.round(depth * 6000);
+  elDepthReadout.textContent = depthM.toLocaleString();
+  elDepthCursor.style.top    = (depth * 100) + '%';
+
+  // Physics
+  const pressure = (1 + depthM / 10).toFixed(0);
+  const temp     = Math.max(1.0, 4.2 - depth * 3.5).toFixed(1);
+  const salinity = (34.5 + depth * 0.4).toFixed(1);
+  elPressure.textContent = pressure + ' atm';
+  elTemp.textContent     = temp + ' °C';
+  elSalinity.textContent = salinity + ' PSU';
+
+  // Zone
+  let zone = ZONES[0];
+  for (const z of ZONES) { if (depth >= z.minD) zone = z; }
+  elZoneName.textContent = zone.name;
+  elZoneDesc.textContent = zone.desc;
+
+  // Creature rotation every 8 seconds
+  const ci = Math.floor(t / 8000) % CREATURES.length;
+  if (ci !== lastCreatureIdx) {
+    lastCreatureIdx = ci;
+    const cr = CREATURES[ci];
+    elCName.textContent     = cr.name;
+    elCSci.textContent      = cr.sci;
+    elCZone.textContent     = cr.zone;
+    elCDepth.textContent    = cr.depth;
+    elCColor.textContent    = cr.color;
+    elCStrategy.textContent = cr.strategy;
+    elCBioBar.style.width   = cr.bio + '%';
+    elCBioBar.style.background = cr.bioColor;
+    elCBioBar.style.color      = cr.bioColor;
+    elCBioBar.style.boxShadow  = `0 0 8px ${cr.bioColor}`;
+    elCFact.textContent     = cr.fact;
+  }
+
+  // Luciferin counter (fake but scientifically-flavored)
+  luciferinRate = Math.round(12000 + Math.sin(t * 0.002) * 5000 + depth * 20000);
+  luciferinCount += luciferinRate / 60;
+  elLuciferin.textContent = Math.round(luciferinRate).toLocaleString().padStart(6, '0');
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER LOOP
+// ═══════════════════════════════════════════════════════════
+let startTime = null;
+
+function frame(ts) {
+  if (!startTime) startTime = ts;
+  const t = ts - startTime;
+
+  // Smooth inputs
+  smx += (mx - smx) * 0.04;
+  smy += (my - smy) * 0.04;
+  scrollDepth += (targetScroll - scrollDepth) * 0.025;
+
+  // Age sonar pings
+  sonarPings = sonarPings.map(p => ({ ...p, t: p.t + 0.008 })).filter(p => p.t < 1.0);
+
+  // Upload uniforms
+  gl.uniform2f(uLoc.res, W, H);
+  gl.uniform1f(uLoc.time, t);
+  gl.uniform2f(uLoc.mouse, smx, smy);
+  gl.uniform1f(uLoc.depth, scrollDepth);
+  gl.uniform1i(uLoc.pingCount, sonarPings.length);
+
+  // Pack pings as flat array for uniform upload
+  const pingData = new Float32Array(18); // 6 * 3
+  sonarPings.forEach((p, i) => {
+    pingData[i*3]   = p.x;
+    pingData[i*3+1] = p.y;
+    pingData[i*3+2] = p.t;
+  });
+  gl.uniform3fv(uLoc.pings, pingData);
+
   gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-  updateDepth(t);
+  updateHUD(t, scrollDepth);
   requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('loader').classList.add('hidden');
+    document.getElementById('hud').classList.add('visible');
+    requestAnimationFrame(frame);
+  }, 2200);
+});
 </script>
 </body>
 </html>
